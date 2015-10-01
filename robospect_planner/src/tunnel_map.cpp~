@@ -1,0 +1,8 @@
+#include<robospect_planner/obstacle_map.h>
+
+using namespace std;
+
+TunnelMap::TunnelMap();
+~TunnelMap();
+
+void pclCallback(const sensor_msgs::PointCloud2::ConstPtr& pcl_msg);
