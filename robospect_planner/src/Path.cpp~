@@ -1,5 +1,0 @@
-#include <robospect_planner/Path.h>
-
-Path::Path(){
-  
-}
