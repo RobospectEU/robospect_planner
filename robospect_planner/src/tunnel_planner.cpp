@@ -1,40 +1,43 @@
+#include<robospect_planner/tunnel_planner.h>
+
 TunnelPlanner::TunnelPlanner(ros::NodeHandle h) : nh_(h), private_nh_("~"), desired_freq_(100.0),
 						  Component(desired_freq_),
-						  action_server_goto(node_handle_, ros::this_node::getName(), false)
+						  action_server_goto(nh_, ros::this_node::getName(), false)
 						  // boost::bind(&purepursuit_planner_node::executeCB, this, _1), false)
 {
   bRunning = false;
   
   ROSSetup();
   
-  dLookAhead_ = d_lookahear_min_;
+  dLookAhead_ = d_lookahead_min_;
   dLinearSpeed_ = 0;
   pose2d_robot.x = pose2d_robot.y = pose2d_robot.theta = 0.0;
   bEnabled = true;
   bCancel = false;
-  bObstacle = true;
   
   sComponentName.assign("tunnel_planner");
   iState = INIT_STATE;
+
+  tm_=new TunnelMap("tunnel_map");
 }
 
 void TunnelPlanner::ROSSetup(){
   string s_command_type;
 		
   private_nh_.param<string>("odom_topic", odom_topic_, "/odom");
-  private_nh_.param<string>("pcl_topic", pcl_topic_, "/scan_cloud");
   private_nh_.param<string>("cmd_topic_vel", cmd_topic_vel_,"/cmd_vel");
   private_nh_.param<string>("position_source", position_source_, "ODOM");
   private_nh_.param("desired_freq", desired_freq_, desired_freq_);
   private_nh_.param<string>("target_frame", target_frame_, "/base_footprint");
   private_nh_.param<string>("command_type", s_command_type, COMMAND_ACKERMANN_STRING);
-  private_nh_.param("d_lookahear_min", d_lookahear_min_, D_LOOKAHEAD_MIN);
-  private_nh_.param("d_lookahear_max", d_lookahear_max_, D_LOOKAHEAD_MAX);
+  private_nh_.param("d_lookahead_min", d_lookahead_min_, D_LOOKAHEAD_MIN);
+  private_nh_.param("d_lookahead_max", d_lookahead_max_, D_LOOKAHEAD_MAX);
   private_nh_.param("d_dist_wheel_to_center", d_dist_wheel_to_center_, D_WHEEL_ROBOT_CENTER);
-  private_nh_.param("max_speed", max_speed_, MAX_SPEED); 
-  private_nh_.param("kr", Kr, AGVS_DEFAULT_KR); //TODO
+  private_nh_.param("desired_distance", desired_distance_, DEFAULT_DESIRED_DISTANCE);
+  private_nh_.param("max_speed", max_speed_, MAX_SPEED);
+  private_nh_.param("kr", Kr, DEFAULT_KR);
 
-  ROS_INFO("%s::ROSSetup(): odom_topic = %s, command_topic_vel = %s, position source = %s, desired_hz=%.1lf, min_lookahead = %.1lf, max_lookahead = %.1lf, kr = %.2lf, command_type = %s", sComponentName.c_str(), odom_topic_.c_str(), cmd_topic_vel_.c_str(), position_source_.c_str(), desired_freq_, d_lookahear_min_, d_lookahear_max_, Kr, s_command_type.c_str());
+  ROS_INFO("%s::ROSSetup(): odom_topic = %s, command_topic_vel = %s, position source = %s, desired_hz=%.1lf, min_lookahead = %.1lf, max_lookahead = %.1lf, kr = %.2lf, command_type = %s", sComponentName.c_str(), odom_topic_.c_str(), cmd_topic_vel_.c_str(), position_source_.c_str(), desired_freq_, d_lookahead_min_, d_lookahead_max_, Kr, s_command_type.c_str());
 		
   // From Component class
   threadData.dDesiredHz = desired_freq_;
@@ -43,12 +46,13 @@ void TunnelPlanner::ROSSetup(){
     command_type_ = COMMAND_ACKERMANN;
   }else if(s_command_type.compare(COMMAND_TWIST_STRING) == 0){
     command_type_ = COMMAND_TWIST;
+    d_dist_wheel_to_center_ = 1.0; //TODO: why???
   }else{
     command_type_ = COMMAND_TWIST;  // default value
     d_dist_wheel_to_center_ = 1.0;
   }
          
-  if(command_type == COMMAND_ACKERMANN){
+  if(command_type_ == COMMAND_ACKERMANN){
     // Publish through the node handle Ackerman type messages to the command vel topic
     vel_pub_ = private_nh_.advertise<ackermann_msgs::AckermannDriveStamped>(cmd_topic_vel_, 1);			
   }else{
@@ -62,9 +66,7 @@ void TunnelPlanner::ROSSetup(){
   }else 
     ui_position_source = ODOM_SOURCE;
     
-  odom_sub_ = private_nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 1, &TunnelPlanner::OdomCallback, this);
-  pcl_sub_ = private_nh_.subscribe<sensor_msgs::PointCloud2>(pcl_topic_, 1, &TunnelPlanner::pclCallback, this);
-    
+  odom_sub_ = private_nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 1, &TunnelPlanner::OdomCallback, this);    
 	         	
   // Action server 
   action_server_goto.registerGoalCallback(boost::bind(&TunnelPlanner::GoalCB, this)); //DO NOTHING!!!
@@ -73,7 +75,7 @@ void TunnelPlanner::ROSSetup(){
 
 void TunnelPlanner::OdomCallback(const nav_msgs::Odometry::ConstPtr& odom_msg)
 {
-  last_command_time_ = ros::Time::now();
+  last_odom_time_ = ros::Time::now();
   if(ui_position_source == ODOM_SOURCE){		
     // converts the odom to pose 2d only if the robot position source is set to odometry
     // when using MAP_SOURCE, the robot pose update is done in AllState()
@@ -83,7 +85,7 @@ void TunnelPlanner::OdomCallback(const nav_msgs::Odometry::ConstPtr& odom_msg)
   }
 		
   // Get the linear speed
-  dLinearSpeed_= odometry_robot.twist.twist.linear.x;
+  dLinearSpeed_= odom_msg->twist.twist.linear.x;
 }
 
 void TunnelPlanner::ControlThread()
@@ -174,7 +176,7 @@ void TunnelPlanner::StandbyState(){
   if(CheckOdomReceive() == -1)
     SwitchToState(EMERGENCY_STATE);
   else{
-    if(bEnabled && !bCancel && !t_map.bObstacle){
+    if(bEnabled && !bCancel && !tm_->isFree()){
       //If we have one or more paths and they were correctly merged, switch to Ready
       if(pathCurrent_.Size() > 0 || MergePath() == OK){    //In MergePath we check that pathCurrent_.Size is >2. Not understand the sense of the first check!!! 
 	ROS_INFO("%s::StandbyState: route available, switching to ReadyState", sComponentName.c_str());
@@ -214,7 +216,7 @@ ReturnValue TunnelPlanner::MergePath(){  //TODO: Is this a sort of GoalCB??? NOT
 	pathFilling_.AddWaypoint(new_waypoint);							
       }
       
-      if(pathFilling_.Optimize(AGVS_TURN_RADIUS) != OK) //TODO!!! SOLVE!!!!
+      if(pathFilling_.Optimize(TURN_RADIUS) != OK) //TODO!!! SOLVE!!!!
 	ROS_ERROR("%s::MergePath: Error optimizing the path", sComponentName.c_str());
 
       ROS_INFO("Printing the path after the optimization");
@@ -233,15 +235,17 @@ ReturnValue TunnelPlanner::MergePath(){  //TODO: Is this a sort of GoalCB??? NOT
 	aux.GetWaypoint(0, &wFirst);
 	aux.BackWaypoint(&wLast);
 
-	ROS_INFO("%s::MergePath: Adding new %d points from (%.2lf, %.2lf) to (%.2lf, %.2lf) and %d magnets", sComponentName.c_str(), aux.NumOfWaypoints() ,wFirst.dX, wFirst.dY, wLast.dX, wLast.dY, aux.NumOfMagnets());
-	ROS_INFO("%s::MergePath: Current number of points = %d and magnets = %d", sComponentName.c_str(), pathCurrent_.NumOfWaypoints() , pathCurrent_.NumOfMagnets());
+	ROS_INFO("%s::MergePath: Adding new %d points from (%.2lf, %.2lf) to (%.2lf, %.2lf) and %d magnets",
+		 sComponentName.c_str(), aux.NumOfWaypoints() ,wFirst.dX, wFirst.dY, wLast.dX, wLast.dY, aux.NumOfMagnets());
+	ROS_INFO("%s::MergePath: Current number of points = %d and magnets = %d",
+		 sComponentName.c_str(), pathCurrent_.NumOfWaypoints() , pathCurrent_.NumOfMagnets());
 					
 	// Adds the first path in the queue to the current path
 	pathCurrent_+=qPath.front();
 					
 	// Needs at least two points
 	if(pathCurrent_.NumOfWaypoints() < 2){		
-	  if(pathCurrent.CreateInterpolatedWaypoint(this->pose2d_robot) == ERROR){
+	  if(pathCurrent_.CreateInterpolatedWaypoint(this->pose2d_robot) == ERROR){
 	    ROS_ERROR("%s::MergePath: Error adding an extra point", sComponentName.c_str());
 	  }
 	}
@@ -276,7 +280,7 @@ void TunnelPlanner::ReadyState(){
     SwitchToState(STANDBY_STATE);
     return;
   }
-  if(t_map.bObstacle){
+  if(tm_->isFree()){
     ROS_INFO("%s::ReadyState: Obstacle detected, cancel requested", sComponentName.c_str());
     SetRobotSpeed(0.0, 0.0);
     SwitchToState(STANDBY_STATE);
@@ -305,7 +309,7 @@ void TunnelPlanner::ReadyState(){
 }
 	
 void TunnelPlanner::SetRobotSpeed(double speed, double angle){
-  if(command_type == COMMAND_ACKERMANN){
+  if(command_type_ == COMMAND_ACKERMANN){
     ackermann_msgs::AckermannDriveStamped ref_msg;
     
     ref_msg.header.stamp = ros::Time::now();
@@ -401,10 +405,78 @@ void TunnelPlanner::CancelPath(){
 }
 
 int TunnelPlanner::PurePursuit(){
-  Waypoint last_waypoint;
+  Waypoint last_waypoint, next_waypoint;
   double dAuxSpeed, dAuxDist, wref;
+  double yaw;
+  double dx1,dy1,x1,y1;
+  double desired_yaw_,actual_distance_;
+  double curv;
+  double dth;
+  
+  geometry_msgs::Pose2D current_position = this->pose2d_robot;		
+  geometry_msgs::Pose2D next_position;
+ 
+  yaw = current_position.theta;
 
+  if(pathCurrent_.GetNextWaypoint(&next_waypoint) == ERROR){
+    ROS_ERROR("%s::PurePursuit: Error getting next waypoint in the path", sComponentName.c_str());
+    return -1;
+  }
+  
+  if (current_position.x>=next_waypoint.dX){ //TODO: Improve this check!!!
+    pathCurrent_.NextWaypoint();
+    if(pathCurrent_.GetCurrentWaypointIndex() == ERROR){
+      ROS_ERROR("%sError setting next waypoint", sComponentName.c_str());
+      return ERROR;
+    }
+  }
 
+  UpdateLookAhead();
+  
+  double desired_yaw=tm_->getWallOrientation();
+  double actual_distance=tm_->getWallDistance();
+  //TODO: check tf: these values are referred to the base_footprint frame (laser scans are reported to base_footprint)
+  
+  // We need to correct the distance instead of aligning the orientation
+  dx1=-(actual_distance-desired_distance_)*sin(desired_yaw);
+  dy1=(actual_distance-desired_distance_)*cos(desired_yaw);
+
+  //Already in the robot frame!!!
+  next_position.x=cos(desired_yaw)*dLookAhead_+dx1;
+  next_position.y=sin(desired_yaw)*dLookAhead_+dy1;
+  next_position.theta=desired_yaw;
+
+  ROS_INFO("Next position in robot frame. x: %5.5f, y: %5.5f theta: %5.5f", next_position.x, next_position.y, next_position.theta);
+
+  x1 = next_position.x;
+  y1 = next_position.y;
+  if ((x1*x1 + y1*y1) == 0)
+    curv = 0;
+  else
+    curv = (2.0 / (x1*x1 + y1*y1)) * -y1; //Original
+
+  // Obtenemos alfa_ref en bucle abierto segun curvatura
+  wref = atan(d_dist_wheel_to_center_/(1.0/curv));
+  
+  if(pathCurrent_.BackWaypoint(&last_waypoint) == ERROR){
+    ROS_ERROR("%s::PurePursuit: Error getting the last point in the path", sComponentName.c_str());
+    return -1;
+  }
+
+  dAuxDist = Dist(current_position.x, current_position.y, last_waypoint.dX, last_waypoint.dY);
+  
+  dAuxSpeed = next_waypoint.dSpeed;
+
+  if (dAuxSpeed >= 0)
+    dth = next_position.theta - current_position.theta;
+  else
+    dth = -(next_position.theta + Pi - current_position.theta);
+
+  // normalize
+  radnorm(&dth);
+  double aux_wref = wref;
+  wref += Kr * dth;
+		
   //Check speeds limits depending of distance or speed restrictions 
   if(fabs(dAuxSpeed) > max_speed_){ 
     if(dAuxSpeed > 0)
@@ -440,6 +512,30 @@ int TunnelPlanner::PurePursuit(){
       return 1;
     }
   }
-
   return 0;
+}
+
+void TunnelPlanner::UpdateLookAhead(){
+  double aux_lookahead = fabs(dLinearSpeed_);
+  double desired_lookahead = 0.0;
+  double inc = 0.01;	// incremento del lookahead
+  
+  if(aux_lookahead < d_lookahead_min_)
+    desired_lookahead = d_lookahead_min_;
+  else if(aux_lookahead > d_lookahead_max_)
+    desired_lookahead = d_lookahead_max_;
+  else{
+    desired_lookahead = aux_lookahead;
+  }
+  
+  if((desired_lookahead - 0.001) > dLookAhead_){
+    dLookAhead_+= inc;
+  }else if((desired_lookahead + 0.001) < dLookAhead_)
+    dLookAhead_-= inc;
+}
+
+double TunnelPlanner::Dist(double x1, double y1, double x2, double y2) {
+  double diff_x = (x2 - x1);
+  double diff_y = (y2 - y1);
+  return sqrt( diff_x*diff_x + diff_y*diff_y );
 }

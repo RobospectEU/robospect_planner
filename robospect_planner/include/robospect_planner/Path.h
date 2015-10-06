@@ -1,3 +1,6 @@
+#ifndef PATH_H
+#define PATH_H
+
 #include <string.h>
 #include <vector>
 #include <queue>
@@ -5,10 +8,13 @@
 #include <math.h>
 #include <cstdlib>
 
-#include <robotnik_pp_planner/Component.h>  //enum with ReturnValue for methods
+#include <robospect_planner/Component.h>  //enum with ReturnValue for methods
+#include <geometry_msgs/Pose2D.h>
 
-#define MIN_ANGLE_BEZIE   0.261799388	// ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER
+#define MIN_ANGLE_BEZIER   0.261799388	// ángulo (radianes) mínimo entre segmentos de la recta para los que ajustaremos a una curva de BEZIER
 #define BEZIER_CONTROL_POINTS  5
+#define MAX_SPEED_LVL1	0.5
+#define MAX_SPEED_LVL2	0.3
 
 using namespace std;
 
@@ -192,3 +198,5 @@ class Path{
   void Print();
 
 };
+
+#endif

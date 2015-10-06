@@ -1,3 +1,4 @@
+#include <ros/ros.h>
 #include <robospect_planner/tunnel_planner.h>
 
 int main(int argc, char** argv)
