@@ -48,6 +48,7 @@ class TunnelMap{
 
  public:
   ros::Publisher pub_wall_line_;
+  ros::Publisher pub_wall_pcl_;
   ros::Subscriber pcl_sub_;
   string pcl_topic_;
   //!Flag variable to memorize if obstacles were detected

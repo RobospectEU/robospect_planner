@@ -160,6 +160,10 @@ class TunnelPlanner: public Component
   //TFs (used only in MAP_SOURCE mode)
   tf::TransformListener listener;
   tf::StampedTransform transform_;
+
+  //JUST FOR DEBUG!!!
+  ros::Publisher pub_next_point_;
+  ros::Publisher pub_next_pose_;
   
 };
 

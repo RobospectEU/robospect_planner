@@ -30,6 +30,8 @@ TunnelMap::TunnelMap(string name): private_nh_("~" + name){
   if(publish_wall_line_=="true")
     pub_wall_line_ = private_nh_.advertise<geometry_msgs::PoseStamped> ("/wall_reference_line", 1);
   
+  pub_wall_pcl_ = private_nh_.advertise<sensor_msgs::PointCloud2> ("/wall_pcl", 1);
+  
   pcl_sub_=private_nh_.subscribe(pcl_topic_, 1, &TunnelMap::pclCallback, this);    
 
   yaw_=0.0;
@@ -38,12 +40,16 @@ TunnelMap::TunnelMap(string name): private_nh_("~" + name){
   bFirstLineFound=false;
   bSecondLineFound=false;
   bObstacle=true;  
-  obs_x_low_=footprint_length_/2;
-  obs_x_high_=obstacle_range_;
+  obs_x_low_=-footprint_length_/2;
+  obs_x_high_=obstacle_range_+footprint_length_/2;
   obs_y_low_=-(footprint_width_/2+lateral_clearance_);
   obs_y_high_=(footprint_width_/2+lateral_clearance_);
 
+  ROS_INFO("TunnelMap initialized!!!");
   //TODO ADD MUTEX
+
+  ROS_INFO("TunnelMap(): pcl_topic = %s",pcl_topic_.c_str());
+	
 }
 
 TunnelMap::~TunnelMap(){}
@@ -52,7 +58,7 @@ void TunnelMap::pclCallback(const sensor_msgs::PointCloud2& pcl_msg){
   pcl::PCLPointCloud2 temp_pcl_;
   pcl_conversions::toPCL(pcl_msg, temp_pcl_);
   pcl::fromPCLPointCloud2(temp_pcl_,*input_cloud_);
-  ROS_INFO("Received a obstacle cloud of %u points",(uint32_t)(input_cloud_->size()));
+  //ROS_INFO("Received a tunnel cloud of %u points",(uint32_t)(input_cloud_->size()));
   
   header_=pcl_msg.header;
 
@@ -68,7 +74,7 @@ void TunnelMap::pclCallback(const sensor_msgs::PointCloud2& pcl_msg){
   pass.setFilterLimits (obs_y_low_,obs_y_high_);
   pass.filter (*obstacle_cloud_);
 
-  ROS_INFO("Get an obstacle cloud of %u points",(uint32_t)(obstacle_cloud_->size()));
+  //ROS_INFO("Get an obstacle cloud of %u points",(uint32_t)(obstacle_cloud_->size()));
   bObstacle = (obstacle_cloud_->points.size()>0) ? true : false;
 
   /****** NOW TURN TO WALL DETECTION *******/
@@ -100,6 +106,14 @@ bool TunnelMap::getWallLine(const pcl::PointCloud<pcl::PointXYZ>::Ptr& input_pcl
   pass.setFilterFieldName ("x");
   pass.setFilterLimits (0.0,lookahead_dist_);
   pass.filter(*wall_cloud);
+
+  //ONLY FOR DEBUG!!
+  pcl::PCLPointCloud2 temp_pcl_;
+  sensor_msgs::PointCloud2 cloud_out;
+  pcl::toPCLPointCloud2(*wall_cloud,temp_pcl_);
+  pcl_conversions::fromPCL(temp_pcl_, cloud_out);
+  cloud_out.header=header_;
+  pub_wall_pcl_.publish(cloud_out);
   
   if (wall_cloud->points.size ()>2){
     seg.setOptimizeCoefficients (true);
@@ -109,32 +123,32 @@ bool TunnelMap::getWallLine(const pcl::PointCloud<pcl::PointXYZ>::Ptr& input_pcl
     
     seg.setInputCloud(wall_cloud);
     seg.segment (*inliers, *coefficients);
-    ROS_INFO("Get %u inliers in a cloud of %u points",
-	     (uint32_t)(inliers->indices.size()),(uint32_t)(wall_cloud->size()));
+    //ROS_INFO("Get %u inliers in a cloud of %u points",
+    //	     (uint32_t)(inliers->indices.size()),(uint32_t)(wall_cloud->size()));
   }else{
      ROS_WARN("The filtered cloud has less than 2 points, could not interpolate the line!");
      return false;
   }
     
   // Obtain the line point and direction
-  Eigen::Vector4f line_pt  (coefficients->values[0], coefficients->values[1], coefficients->values[2], 0);
+  Eigen::Vector4f line_pt  (coefficients->values[0], coefficients->values[1], coefficients->values[2], 1);
   Eigen::Vector4f line_dir (coefficients->values[3], coefficients->values[4], coefficients->values[5], 0);
-  Eigen::Vector4f origin_pt (0.0,0.0,coefficients->values[2],0);
+  Eigen::Vector4f origin_pt (0.0,0.0,coefficients->values[2],1);
   line_dir.normalize ();
-
+ 
   // Calculate the distance from the base_footprint to the line
   // D = ||(P2-P1) x (P1-P0)|| / ||P2-P1|| = norm (cross (p2-p1, p2-p0)) / norm(p2-p1)
   distance = sqrt ((line_pt - origin_pt).cross3 (line_dir).squaredNorm ());
-  ROS_INFO("The distance of the robot from the line is: %5.5f m",distance);
+//ROS_INFO("The distance of the robot from the line is: %5.5f m",distance);
 
   //Now fill in the line_pose message (PoseStamped)
   line_pose.header=header_;
 
-  line_pose.pose.orientation = tf::createQuaternionMsgFromYaw(line_dir[1]/line_dir[0]);
   line_pose.pose.position.x = 0.5;    
   line_pose.pose.position.y =line_pt[1]+(line_dir[1]/line_dir[0])*(0.5-line_pt[0]);
   line_pose.pose.position.z = 0.0;
-
+  line_pose.pose.orientation = tf::createQuaternionMsgFromYaw(atan(line_dir[1]/line_dir[0]));
+  
   //TODO Add some checks!!
   return true;
 }

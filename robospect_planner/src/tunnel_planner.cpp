@@ -19,6 +19,8 @@ TunnelPlanner::TunnelPlanner(ros::NodeHandle h) : nh_(h), private_nh_("~"), desi
   iState = INIT_STATE;
 
   tm_=new TunnelMap("tunnel_map");
+
+  ROS_INFO("TunnelPlanner initialized!!");
 }
 
 void TunnelPlanner::ROSSetup(){
@@ -66,7 +68,10 @@ void TunnelPlanner::ROSSetup(){
   }else 
     ui_position_source = ODOM_SOURCE;
     
-  odom_sub_ = private_nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 1, &TunnelPlanner::OdomCallback, this);    
+  odom_sub_ = private_nh_.subscribe<nav_msgs::Odometry>(odom_topic_, 1, &TunnelPlanner::OdomCallback, this);
+
+  pub_next_point_ = private_nh_.advertise<geometry_msgs::PointStamped>("next_point", 100);
+  pub_next_pose_ = private_nh_.advertise<geometry_msgs::PoseStamped>("next_pose", 100);
 	         	
   // Action server 
   action_server_goto.registerGoalCallback(boost::bind(&TunnelPlanner::GoalCB, this)); //DO NOTHING!!!
@@ -86,6 +91,7 @@ void TunnelPlanner::OdomCallback(const nav_msgs::Odometry::ConstPtr& odom_msg)
 		
   // Get the linear speed
   dLinearSpeed_= odom_msg->twist.twist.linear.x;
+  //ROS_INFO("Received odom message!!");
 }
 
 void TunnelPlanner::ControlThread()
@@ -130,6 +136,7 @@ void TunnelPlanner::ControlThread()
 }
 
 void TunnelPlanner::InitState(){
+  // ROS_INFO("TunnelPlanner::InitState");
   if(bInitialized && bRunning){ //Flag from the Component class
     if(CheckOdomReceive() == 0)
       SwitchToState(STANDBY_STATE);
@@ -138,7 +145,8 @@ void TunnelPlanner::InitState(){
       Setup();
     if(!bRunning)
       Start();
-  }		  
+  }
+  //ROS_INFO("bInitialized: %u, bRunning: %u", bInitialized, bRunning);
 }
 
 ReturnValue TunnelPlanner::Setup(){
@@ -173,10 +181,11 @@ int TunnelPlanner::CheckOdomReceive(){
 }
 
 void TunnelPlanner::StandbyState(){
+  //ROS_INFO("TunnelPlanner::StandbyState, isFree: %u, bCancel: %u, bEnabled: %u",);
   if(CheckOdomReceive() == -1)
     SwitchToState(EMERGENCY_STATE);
   else{
-    if(bEnabled && !bCancel && !tm_->isFree()){
+    if(bEnabled && !bCancel && tm_->isFree()){
       //If we have one or more paths and they were correctly merged, switch to Ready
       if(pathCurrent_.Size() > 0 || MergePath() == OK){    //In MergePath we check that pathCurrent_.Size is >2. Not understand the sense of the first check!!! 
 	ROS_INFO("%s::StandbyState: route available, switching to ReadyState", sComponentName.c_str());
@@ -280,7 +289,7 @@ void TunnelPlanner::ReadyState(){
     SwitchToState(STANDBY_STATE);
     return;
   }
-  if(tm_->isFree()){
+  if(!tm_->isFree()){
     ROS_INFO("%s::ReadyState: Obstacle detected, cancel requested", sComponentName.c_str());
     SetRobotSpeed(0.0, 0.0);
     SwitchToState(STANDBY_STATE);
@@ -378,7 +387,7 @@ void TunnelPlanner::AllState(){
 
 void TunnelPlanner::AnalyseCB(){
   if (!action_server_goto.isActive()){
-    ROS_INFO("%s::AnalyseCB: Action server not active", sComponentName.c_str());
+    //ROS_INFO("%s::AnalyseCB: Action server not active", sComponentName.c_str());
     return;
   }
   
@@ -446,14 +455,33 @@ int TunnelPlanner::PurePursuit(){
   next_position.y=sin(desired_yaw)*dLookAhead_+dy1;
   next_position.theta=desired_yaw;
 
-  ROS_INFO("Next position in robot frame. x: %5.5f, y: %5.5f theta: %5.5f", next_position.x, next_position.y, next_position.theta);
+  geometry_msgs::PointStamped next_point;
+  geometry_msgs::PoseStamped next_pose;
+
+  next_point.header.frame_id="base_footprint";
+  next_point.header.stamp=ros::Time::now();
+  next_point.point.x=next_position.x;
+  next_point.point.y=next_position.y;
+  next_point.point.z=0.0;
+
+  next_pose.header.frame_id="base_footprint";
+  next_pose.header.stamp=ros::Time::now();
+  next_pose.pose.position.x=next_position.x;
+  next_pose.pose.position.y=next_position.y;
+  next_pose.pose.position.z=0.0;
+  next_pose.pose.orientation = tf::createQuaternionMsgFromYaw(next_position.theta);
+
+  pub_next_point_.publish(next_point);
+  pub_next_pose_.publish(next_pose);
+
+  //ROS_INFO("Next position in robot frame. x: %5.5f, y: %5.5f theta: %5.5f", next_position.x, next_position.y, next_position.theta);
 
   x1 = next_position.x;
   y1 = next_position.y;
   if ((x1*x1 + y1*y1) == 0)
     curv = 0;
   else
-    curv = (2.0 / (x1*x1 + y1*y1)) * -y1; //Original
+    curv = (2.0 / (x1*x1 + y1*y1)) * y1; //Original
 
   // Obtenemos alfa_ref en bucle abierto segun curvatura
   wref = atan(d_dist_wheel_to_center_/(1.0/curv));
