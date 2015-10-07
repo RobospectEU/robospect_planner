@@ -1,0 +1,15 @@
+odom_topic: "/summit_xl/odom"
+cmd_topic_vel: "/cmd_vel"
+position_source: "ODOM"
+desired_freq: 50.0
+target_frame: "/base_footprint"
+command_type: "Twist"
+d_lookahead_min: 0.3
+d_lookahead_max: 1.1
+d_dist_wheel_to_center: 0.3
+desired_distance: 1.0
+max_speed: 1.2
+kr: 0.20
+
+
+
