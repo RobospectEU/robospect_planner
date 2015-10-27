@@ -18,7 +18,7 @@
     <rosparam command="load" file="$(find robospect_planner)/config/tunnel_map.yaml"/>
   </node>
 
-  <node pkg="robotnik_pp_planner" type="path_marker.py" name="path_marker" output="screen">
+  <node pkg="robospect_planner" type="path_marker.py" name="path_marker" output="screen">
 	<param name="frame_id" value="/odom" type="string"/>
         <param name="planner" value="robospect_planner" type="string"/>
   </node>

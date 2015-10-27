@@ -12,16 +12,27 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs 
   tf
   diagnostic_updater
-  robotnik_pp_msgs
+  actionlib_msgs
   ackermann_msgs
   interactive_markers
   visualization_msgs
   std_srvs
   self_test
   actionlib
+  message_generation
 )
 
 find_package(PCL REQUIRED)
+
+add_message_files(
+   FILES goal.msg
+)
+
+add_action_files(
+	DIRECTORY action FILES GoTo.action)
+
+## Generate added messages and services with any dependencies listed here
+generate_messages(DEPENDENCIES std_msgs actionlib_msgs geometry_msgs ackermann_msgs)
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
@@ -46,11 +57,12 @@ catkin_package(
     sensor_msgs 
     std_srvs
     actionlib
+    actionlib_msgs
     nav_msgs
     std_msgs 
     geometry_msgs
-    robotnik_pp_msgs 
     ackermann_msgs
+    message_runtime
    DEPENDS
     PCL
 )
@@ -71,6 +83,13 @@ target_link_libraries(tunnel_planner
 
 ## Declare a cpp executable
 add_executable(robospect_planner_node src/robospect_planner_node.cpp)
-add_dependencies(robospect_planner_node roscpp sensor_msgs robotnik_pp_msgs_generate_messages_cpp)
+add_dependencies(robospect_planner_node roscpp sensor_msgs robotnik_msgs robospect_planner_generate_messages_cpp)
 target_link_libraries(robospect_planner_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} tunnel_planner)
+
+##Install
+
+install(PROGRAMS
+   scripts/robospect_planner/path_marker.py
+   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+ )
 

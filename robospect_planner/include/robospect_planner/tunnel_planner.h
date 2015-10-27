@@ -11,8 +11,8 @@
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <actionlib/server/simple_action_server.h>
-#include <robotnik_pp_msgs/GoToAction.h>
-#include <robotnik_pp_msgs/goal.h>
+#include <robospect_planner/GoToAction.h>
+#include <robospect_planner/goal.h>
 
 #include <nav_msgs/Odometry.h>
 #include <ackermann_msgs/AckermannDriveStamped.h>
@@ -157,10 +157,10 @@ class TunnelPlanner: public Component
   ros::Time last_odom_time_, last_map_time_;
 
   //! Actionlib
-  actionlib::SimpleActionServer<robotnik_pp_msgs::GoToAction> action_server_goto;
-  robotnik_pp_msgs::GoToFeedback goto_feedback;
-  robotnik_pp_msgs::GoToResult goto_result;
-  robotnik_pp_msgs::GoToGoal goto_goal;
+  actionlib::SimpleActionServer<robospect_planner::GoToAction> action_server_goto;
+  robospect_planner::GoToFeedback goto_feedback;
+  robospect_planner::GoToResult goto_result;
+  robospect_planner::GoToGoal goto_goal;
 
   //! TFs (used only in MAP_SOURCE mode)
   tf::TransformListener listener;
