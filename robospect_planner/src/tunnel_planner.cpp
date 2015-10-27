@@ -11,6 +11,7 @@ TunnelPlanner::TunnelPlanner(ros::NodeHandle h) : nh_(h), private_nh_("~"), desi
   
   dLookAhead_ = d_lookahead_min_;
   dLinearSpeed_ = 0;
+  approach_state_=false;
   pose2d_robot.x = pose2d_robot.y = pose2d_robot.theta = 0.0;
   bEnabled = true;
   bCancel = false;
@@ -20,7 +21,7 @@ TunnelPlanner::TunnelPlanner(ros::NodeHandle h) : nh_(h), private_nh_("~"), desi
 
   tm_=new TunnelMap("tunnel_map");
 
-  ROS_INFO("TunnelPlanner initialized!!");
+  ROS_INFO("TunnelPlanner initialized");
 }
 
 void TunnelPlanner::ROSSetup(){
@@ -48,7 +49,7 @@ void TunnelPlanner::ROSSetup(){
     command_type_ = COMMAND_ACKERMANN;
   }else if(s_command_type.compare(COMMAND_TWIST_STRING) == 0){
     command_type_ = COMMAND_TWIST;
-    d_dist_wheel_to_center_ = 1.0; //TODO: why???
+    d_dist_wheel_to_center_ = 1.0;
   }else{
     command_type_ = COMMAND_TWIST;  // default value
     d_dist_wheel_to_center_ = 1.0;
@@ -195,7 +196,7 @@ void TunnelPlanner::StandbyState(){
   }
 }
 
-ReturnValue TunnelPlanner::MergePath(){  //TODO: Is this a sort of GoalCB??? NOT COMPLEATELY CLEAR THE ROLE OF THE QUEUE OF PATHS!!
+ReturnValue TunnelPlanner::MergePath(){  //TODO: why do we need a queue of paths?
   Waypoint new_waypoint, wFirst, wLast;
   Path aux;
 		
@@ -206,7 +207,7 @@ ReturnValue TunnelPlanner::MergePath(){  //TODO: Is this a sort of GoalCB??? NOT
 	direction = CalculateDirectionSpeed(goto_goal.target[1].pose);
       }else{
 	direction = CalculateDirectionSpeed(goto_goal.target[0].pose);
-	}*/ //TODO:: for now not used directional indicator!!
+	}*/ 
 						
       for(int i = 0; i < goto_goal.target.size(); i++){
 	ROS_INFO("%s::MergePath: Point %d (%.3lf, %.3lf, %.3lf) speed = %.3lf", sComponentName.c_str(), i,  goto_goal.target[i].pose.x, 
@@ -216,7 +217,7 @@ ReturnValue TunnelPlanner::MergePath(){  //TODO: Is this a sort of GoalCB??? NOT
 	new_waypoint.dY = goto_goal.target[i].pose.y;
 	new_waypoint.dA = goto_goal.target[i].pose.theta;
 	// Depending on the calculated motion direction, applies positive or negative speed
-	//if(direction == 1){ TODO!!! Does it have to turn??
+	//if(direction == 1){ TODO: Does the robot have to turn??
 	new_waypoint.dSpeed = fabs(goto_goal.target[i].speed);
 	  /*}else{
 	  new_waypoint.dSpeed = -fabs(goto_goal.target[i].speed);
@@ -225,7 +226,7 @@ ReturnValue TunnelPlanner::MergePath(){  //TODO: Is this a sort of GoalCB??? NOT
 	pathFilling_.AddWaypoint(new_waypoint);							
       }
       
-      if(pathFilling_.Optimize(TURN_RADIUS) != OK) //TODO!!! SOLVE!!!!
+      if(pathFilling_.Optimize(TURN_RADIUS) != OK) 
 	ROS_ERROR("%s::MergePath: Error optimizing the path", sComponentName.c_str());
 
       ROS_INFO("Printing the path after the optimization");
@@ -296,7 +297,7 @@ void TunnelPlanner::ReadyState(){
     return;
   }
 
-  //REAL PLANNER CALL
+  //PLANNER CALL
   int ret = PurePursuit();
   
   if(ret == -1){
@@ -314,7 +315,7 @@ void TunnelPlanner::ReadyState(){
     goto_feedback.percent_complete = 100.0;	// Set the percent to 100% to complete the action
     SwitchToState(STANDBY_STATE);
   }
-  // We have to update the percent while the mision is ongoing TODO!!!
+  // TODO: update the percent while the mision is ongoing
 }
 	
 void TunnelPlanner::SetRobotSpeed(double speed, double angle){
@@ -391,7 +392,7 @@ void TunnelPlanner::AnalyseCB(){
     return;
   }
   
-  //TODO: update goto_feedback value here!!! Otherwise it always publishes 0.0 or 100.0		
+  //TODO: update goto_feedback value here	
   action_server_goto.publishFeedback(goto_feedback);
   
   if(goto_feedback.percent_complete == 100.0){
@@ -432,7 +433,8 @@ int TunnelPlanner::PurePursuit(){
     return -1;
   }
   
-  if (current_position.x>=next_waypoint.dX){ //TODO: Improve this check!!!
+  if (current_position.x>=next_waypoint.dX){  
+    //TODO: improve this check (it does not work when the robot is moving in the negative-x direction)	
     pathCurrent_.NextWaypoint();
     if(pathCurrent_.GetCurrentWaypointIndex() == ERROR){
       ROS_ERROR("%sError setting next waypoint", sComponentName.c_str());
@@ -443,14 +445,27 @@ int TunnelPlanner::PurePursuit(){
   UpdateLookAhead();
   
   double desired_yaw=tm_->getWallOrientation();
+  //! If true, the robot is in the approach phase (i.e., the robot is approaching the wall)
+  if (fabs(current_position.theta-desired_yaw)>0.25 && !approach_state_){
+	tm_->setState(APPROACH_STATE);
+	ROS_INFO("PurePursuit(): Approaching the wall");
+     	approach_state_=true;
+	
+  }
+  else if (fabs(current_position.theta-desired_yaw)<0.25 && approach_state_){
+	tm_->setState(NAVIGATION_STATE);
+	ROS_INFO("PurePursuit(): Wall reached, start navigation");
+	approach_state_=false;
+  }
+
   double actual_distance=tm_->getWallDistance();
-  //TODO: check tf: these values are referred to the base_footprint frame (laser scans are reported to base_footprint)
+  //TODO: check tf: these values are referred to the base_footprint frame (laser scans needs to be expressed in base_footprint frame)
   
   // We need to correct the distance instead of aligning the orientation
   dx1=-(actual_distance-desired_distance_)*sin(desired_yaw);
   dy1=(actual_distance-desired_distance_)*cos(desired_yaw);
 
-  //Already in the robot frame!!!
+  //Already in the robot frame
   next_position.x=cos(desired_yaw)*dLookAhead_+dx1;
   next_position.y=sin(desired_yaw)*dLookAhead_+dy1;
   next_position.theta=desired_yaw;
@@ -483,7 +498,6 @@ int TunnelPlanner::PurePursuit(){
   else
     curv = (2.0 / (x1*x1 + y1*y1)) * y1; //Original
 
-  // Obtenemos alfa_ref en bucle abierto segun curvatura
   wref = atan(d_dist_wheel_to_center_/(1.0/curv));
   
   if(pathCurrent_.BackWaypoint(&last_waypoint) == ERROR){
@@ -546,7 +560,7 @@ int TunnelPlanner::PurePursuit(){
 void TunnelPlanner::UpdateLookAhead(){
   double aux_lookahead = fabs(dLinearSpeed_);
   double desired_lookahead = 0.0;
-  double inc = 0.01;	// incremento del lookahead
+  double inc = 0.01;	// lookahead increment
   
   if(aux_lookahead < d_lookahead_min_)
     desired_lookahead = d_lookahead_min_;

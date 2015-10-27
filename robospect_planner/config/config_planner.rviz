@@ -5,13 +5,10 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /TF1/Frames1
-        - /tunnel_pcl1
-        - /wall_pcl1
         - /wall_pcl1/Status1
-        - /next_point1
         - /next_point1/Status1
-        - /next_pose1
         - /next_pose1/Status1
+        - /Odometry1
       Splitter Ratio: 0.549407
     Tree Height: 550
   - Class: rviz/Selection
@@ -82,12 +79,30 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        camera_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_pan_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_tilt_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
         front_left_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
         front_right_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gps_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -121,16 +136,6 @@ Visualization Manager:
       Tree:
         {}
       Update Interval: 0
-      Value: false
-    - Angle Tolerance: 0.001
-      Class: rviz/Odometry
-      Color: 0; 0; 127
-      Enabled: false
-      Keep: 50
-      Length: 0.5
-      Name: Odometry
-      Position Tolerance: 0.001
-      Topic: /summit_xl/odom
       Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -265,6 +270,24 @@ Visualization Manager:
       Shape: Arrow
       Topic: /robospect_planner/next_pose
       Value: true
+    - Angle Tolerance: 1e-06
+      Class: rviz/Odometry
+      Color: 0; 0; 127
+      Enabled: true
+      Keep: 999999999
+      Length: 0.5
+      Name: Odometry
+      Position Tolerance: 1e-05
+      Topic: /summit_xl/odom
+      Value: true
+    - Alpha: 0.7
+      Class: rviz/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic: /map
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -289,22 +312,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 20.2375
+      Distance: 15.8039
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.67816
-        Y: -1.44883
-        Z: -0.00256348
+        X: -11.8968
+        Y: 1.8307
+        Z: 3.1202
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.654797
+      Pitch: 0.429797
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.199993
+      Yaw: 0.0918371
     Saved: ~
 Window Geometry:
   Displays:
@@ -322,5 +345,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1316
-  X: 42
-  Y: -11
+  X: 50
+  Y: 18

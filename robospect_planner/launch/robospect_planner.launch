@@ -23,4 +23,7 @@
         <param name="planner" value="robospect_planner" type="string"/>
   </node>
 
+  <!-- Rviz --> 
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find robospect_planner)/config/config_planner.rviz"/> 
+
 </launch>

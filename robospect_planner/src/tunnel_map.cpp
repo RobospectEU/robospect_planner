@@ -5,23 +5,22 @@ using namespace std;
 TunnelMap::TunnelMap(string name): private_nh_("~" + name){
  
   private_nh_.param("footprint_width",footprint_width_,DEFAULT_FOOTPRINT_WIDTH);
+  private_nh_.param("crane_length",crane_length_,DEFAULT_CRANE_LENGTH);
   private_nh_.param("footprint_length",footprint_length_,DEFAULT_FOOTPRINT_LENGTH);
-  private_nh_.param("lateral_clearance",lateral_clearance_,DEFAULT_LATERAL_CLEARANCE);
-  private_nh_.param("obstacle_range", obstacle_range_, DEFAULT_OBSTACLE_RANGE);
+  private_nh_.param("lateral_clearance",nav_lateral_clearance_,DEFAULT_LATERAL_CLEARANCE);
+  private_nh_.param("obstacle_range", nav_obstacle_range_, DEFAULT_OBSTACLE_RANGE);
 
   private_nh_.param("lookahead_distance",lookahead_dist_,DEFAULT_LOOKAHEAD_DISTANCE);
   private_nh_.param<string>("preferred_wall_side",preferred_wall_side_,"RIGHT");
   private_nh_.param("ransac_threshold",ransac_threshold_,0.1);
-  private_nh_.param("max_y_dist",max_y_dist_,3.0);  //TODO: Improve!!
+  private_nh_.param("max_y_dist",max_y_dist_,10.0);   
   private_nh_.param<string>("publish_wall_line", publish_wall_line_, "true");
   private_nh_.param<string>("pcl_topic", pcl_topic_, "/scan_cloud");
   
   if(preferred_wall_side_ == "RIGHT"){
     first_wall_side_ = WALL_RIGHT_SIDE;
-    second_wall_side_= WALL_LEFT_SIDE;
   }else{ 
     first_wall_side_ = WALL_LEFT_SIDE;
-    second_wall_side_= WALL_RIGHT_SIDE;
   }
 
   input_cloud_.reset(new  pcl::PointCloud<pcl::PointXYZ>());
@@ -36,23 +35,31 @@ TunnelMap::TunnelMap(string name): private_nh_("~" + name){
 
   yaw_=0.0;
   distance_=max_y_dist_;
+  obstacle_range_=nav_obstacle_range_;
+  lateral_clearance_=nav_lateral_clearance_;
   
-  bFirstLineFound=false;
-  bSecondLineFound=false;
+  bLineFound=false;
   bObstacle=true;  
   obs_x_low_=-footprint_length_/2;
-  obs_x_high_=obstacle_range_+footprint_length_/2;
+  obs_x_high_=obstacle_range_+footprint_length_/2+crane_length_;
   obs_y_low_=-(footprint_width_/2+lateral_clearance_);
   obs_y_high_=(footprint_width_/2+lateral_clearance_);
 
-  ROS_INFO("TunnelMap initialized!!!");
-  //TODO ADD MUTEX
-
+  ROS_INFO("TunnelMap initialized");
   ROS_INFO("TunnelMap(): pcl_topic = %s",pcl_topic_.c_str());
-	
 }
 
 TunnelMap::~TunnelMap(){}
+
+void TunnelMap::setState(bool state){
+  if(state){
+     obstacle_range_=0.40;
+     lateral_clearance_=0.05;
+  }else{	
+     obstacle_range_=nav_obstacle_range_;
+     lateral_clearance_=nav_lateral_clearance_;
+  }
+}
 
 void TunnelMap::pclCallback(const sensor_msgs::PointCloud2& pcl_msg){
   pcl::PCLPointCloud2 temp_pcl_;
@@ -79,10 +86,10 @@ void TunnelMap::pclCallback(const sensor_msgs::PointCloud2& pcl_msg){
 
   /****** NOW TURN TO WALL DETECTION *******/
   //!First get the first point cloud on which interpolate the tunnel line 
-  bFirstLineFound=getWallLine(input_cloud_,first_wall_side_,wall_line_pose_,distance_);
+  bLineFound=getWallLine(input_cloud_,first_wall_side_,wall_line_pose_,distance_);
   yaw_=tf::getYaw(wall_line_pose_.pose.orientation);
   
-  if((publish_wall_line_=="true") && bFirstLineFound)
+  if((publish_wall_line_=="true") && bLineFound)
     pub_wall_line_.publish(wall_line_pose_); 
 }
 
@@ -104,7 +111,8 @@ bool TunnelMap::getWallLine(const pcl::PointCloud<pcl::PointXYZ>::Ptr& input_pcl
 
   pass.setInputCloud (wall_cloud);
   pass.setFilterFieldName ("x");
-  pass.setFilterLimits (0.0,lookahead_dist_);
+  pass.setFilterLimits (footprint_length_/2+crane_length_-0.5,footprint_length_/2+crane_length_+lookahead_dist_); 
+  //TODO make another param? (lookback_dist_?)
   pass.filter(*wall_cloud);
 
   //ONLY FOR DEBUG!!
@@ -144,11 +152,11 @@ bool TunnelMap::getWallLine(const pcl::PointCloud<pcl::PointXYZ>::Ptr& input_pcl
   //Now fill in the line_pose message (PoseStamped)
   line_pose.header=header_;
 
-  line_pose.pose.position.x = 0.5;    
-  line_pose.pose.position.y =line_pt[1]+(line_dir[1]/line_dir[0])*(0.5-line_pt[0]);
+  line_pose.pose.position.x = footprint_length_/2+crane_length_;    
+  line_pose.pose.position.y =line_pt[1]+(line_dir[1]/line_dir[0])*(footprint_length_/2+crane_length_-line_pt[0]);
   line_pose.pose.position.z = 0.0;
   line_pose.pose.orientation = tf::createQuaternionMsgFromYaw(atan(line_dir[1]/line_dir[0]));
   
-  //TODO Add some checks!!
+  //TODO Add some checks
   return true;
 }

@@ -19,8 +19,6 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Pose2D.h>
 
-//TODO: Add diagnostic and understand how they work
-
 #define COMMAND_ACKERMANN         100 
 #define COMMAND_TWIST	          200 
 #define COMMAND_ACKERMANN_STRING  "Ackermann" 
@@ -30,7 +28,7 @@
 #define D_LOOKAHEAD_MAX	 1.1	// Maxiumum distance to the current sub-goal
 #define DEFAULT_DESIRED_DISTANCE 1.0				  
 
-#define ODOM_TIMEOUT_ERROR   0.2 // max num. of seconds without receiving odom values TODO: MAKE PARAM
+#define ODOM_TIMEOUT_ERROR   0.2 // max num. of seconds without receiving odom values 
 #define MAP_TIMEOUT_ERROR    0.2 
 
 #define WAYPOINT_POP_DISTANCE_M  0.10 // Maximum error in distance to the last waypoint to end the mission
@@ -50,6 +48,11 @@ enum{
   MAP_SOURCE = 2
 };
 
+enum{
+  APPROACH_STATE = 1,
+  NAVIGATION_STATE = 0
+};
+
 using namespace std;
 
 class TunnelPlanner: public Component
@@ -58,7 +61,7 @@ class TunnelPlanner: public Component
   TunnelPlanner(ros::NodeHandle h);
   ~TunnelPlanner(){};
 
-  //! Setup ROS stuffs (inside constructor)
+  //! Setup ROS stuffs
   void ROSSetup();
   inline void GoalCB(){};
   inline void PreemptCB(){ bCancel=true; }
@@ -110,7 +113,7 @@ class TunnelPlanner: public Component
   unsigned int ui_position_source;
   
   //! Flag to enable/disable the motion
-  bool bEnabled;  //TODO: ACTUALLY SETS TO TRUE AT THE BEGINNING AND NOT CHANGED ANYMORE!!!
+  bool bEnabled;  //TODO: it is set to true at the beginning and is not changed anymore!!
   //! Flag to cancel the current  path
   bool bCancel;
 
@@ -130,6 +133,8 @@ class TunnelPlanner: public Component
   double max_speed_;
   //! constant for Purepursuit
   double Kr;
+  //! Memorize if the robot is approaching the wall (the obstacle_range should be lowered)
+  bool approach_state_;
 
   double d_lookahead_min_;
   double d_lookahead_max_;
@@ -151,17 +156,17 @@ class TunnelPlanner: public Component
   //! Saves the time whenever receives an odom msg and a transform between map and base link (if configured)
   ros::Time last_odom_time_, last_map_time_;
 
-  // ACTIONLIB
+  //! Actionlib
   actionlib::SimpleActionServer<robotnik_pp_msgs::GoToAction> action_server_goto;
   robotnik_pp_msgs::GoToFeedback goto_feedback;
   robotnik_pp_msgs::GoToResult goto_result;
   robotnik_pp_msgs::GoToGoal goto_goal;
 
-  //TFs (used only in MAP_SOURCE mode)
+  //! TFs (used only in MAP_SOURCE mode)
   tf::TransformListener listener;
   tf::StampedTransform transform_;
 
-  //JUST FOR DEBUG!!!
+  //! Just for debug
   ros::Publisher pub_next_point_;
   ros::Publisher pub_next_pose_;
   
