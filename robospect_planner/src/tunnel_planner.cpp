@@ -189,9 +189,14 @@ void TunnelPlanner::StandbyState(){
     if(bEnabled && !bCancel && tm_->isFree()){
       //If we have one or more paths and they were correctly merged, switch to Ready
       if(pathCurrent_.Size() > 0 || MergePath() == OK){    //In MergePath we check that pathCurrent_.Size is >2. Not understand the sense of the first check!!! 
-	ROS_INFO("%s::StandbyState: route available, switching to ReadyState", sComponentName.c_str());
-	SwitchToState(READY_STATE);
-      }
+		ROS_INFO("%s::StandbyState: route available, switching to ReadyState", sComponentName.c_str());
+		SwitchToState(READY_STATE);
+      }else{
+		  if(pathCurrent_.Size() > 0 && tm_->isFree()){
+			  	ROS_WARN("%s::StandbyState: route available but obstacle detected", sComponentName.c_str());
+
+		  }
+	  }
     }
   }
 }

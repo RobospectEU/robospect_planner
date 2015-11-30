@@ -1,9 +1,9 @@
-odom_topic: "/summit_xl/odom"
-cmd_topic_vel: "/cmd_vel"
-position_source: "ODOM"
+odom_topic: "/robospect_platform_controller/odom"
+cmd_topic_vel: "/robospect_platform_controller/ackermann_cmd"
+position_source: "MAP"
 desired_freq: 50.0
 target_frame: "/base_footprint"
-command_type: "Twist"
+command_type: "Ackermann"
 d_lookahead_min: 3.0
 d_lookahead_max: 3.5
 d_dist_wheel_to_center: 0.3
