@@ -198,6 +198,8 @@ void TunnelPlanner::StandbyState(){
 		  }
 	  }
     }
+    
+    //ROS_INFO("%s::StandbyState: Enabled? %s, Cancel? %s, Free? %s",sComponentName.c_str(), bEnabled?"True":"False", bCancel?"True":"False", tm_->isFree()?"True":"False");
   }
 }
 
@@ -243,6 +245,7 @@ ReturnValue TunnelPlanner::MergePath(){  //TODO: why do we need a queue of paths
       pathFilling_.Clear();
     				
       goto_feedback.percent_complete = 0.0;  // Inits the feedback percentage
+      goto_result.route_result = 100;			// Inits the result value
 				
       // Only if exists any path into the queue
       if(qPath.size() > 0){					
@@ -400,9 +403,12 @@ void TunnelPlanner::AnalyseCB(){
   //TODO: update goto_feedback value here	
   action_server_goto.publishFeedback(goto_feedback);
   
-  if(goto_feedback.percent_complete == 100.0){
-    //action_server_goto.setSucceeded(goto_result);
+  if(goto_result.route_result == -1){
     action_server_goto.setAborted(goto_result);
+    ROS_INFO("%s::AnalyseCB: Action finished (aborted)", sComponentName.c_str());
+  }else if(goto_result.route_result == 0 and goto_feedback.percent_complete == 100.0){
+    //action_server_goto.setSucceeded(goto_result);
+    action_server_goto.setSucceeded(goto_result);
     ROS_INFO("%s::AnalyseCB: Action finished", sComponentName.c_str());
   }
 }
