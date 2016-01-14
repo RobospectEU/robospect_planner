@@ -13,6 +13,7 @@
 #include <actionlib/server/simple_action_server.h>
 #include <robospect_planner/GoToAction.h>
 #include <robospect_planner/goal.h>
+#include <robospect_planner/State.h>
 
 #include <nav_msgs/Odometry.h>
 #include <ackermann_msgs/AckermannDriveStamped.h>
@@ -93,6 +94,7 @@ class TunnelPlanner: public Component
   int PurePursuit();
   double Dist(double x1, double y1, double x2, double y2);
   void UpdateLookAhead();
+  int stateToPlannerState(int state);
   
  private:
 
@@ -147,6 +149,8 @@ class TunnelPlanner: public Component
   ros::Publisher vel_pub_;
   //! Subscriber to /odom
   ros::Subscriber odom_sub_;
+  //! publishes the state
+  ros::Publisher state_pub_;
   //! Odom topic name
   string odom_topic_;
   //! Topic name to publish the vel & pos commands

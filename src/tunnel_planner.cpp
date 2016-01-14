@@ -1,4 +1,4 @@
-#include<robospect_planner/tunnel_planner.h>
+#include "robospect_planner/tunnel_planner.h"
 
 TunnelPlanner::TunnelPlanner(ros::NodeHandle h) : nh_(h), private_nh_("~"), desired_freq_(100.0),
 						  Component(desired_freq_),
@@ -73,6 +73,8 @@ void TunnelPlanner::ROSSetup(){
 
   pub_next_point_ = private_nh_.advertise<geometry_msgs::PointStamped>("next_point", 100);
   pub_next_pose_ = private_nh_.advertise<geometry_msgs::PoseStamped>("next_pose", 100);
+  state_pub_ = private_nh_.advertise<robospect_planner::State>("state", 1);
+
 	         	
   // Action server 
   action_server_goto.registerGoalCallback(boost::bind(&TunnelPlanner::GoalCB, this)); //DO NOTHING!!!
@@ -388,6 +390,13 @@ void TunnelPlanner::AllState(){
     }
   }
   
+  robospect_planner::State state_msg;
+  state_msg.state.state = stateToPlannerState(iState);
+  state_msg.state.desired_freq = desired_freq_;
+  state_msg.state.state_description = GetStateString(iState);
+  
+  state_pub_.publish(state_msg);
+  
   AnalyseCB();	// Checks action server state
   
   if(bCancel)	// Cancel current path if required
@@ -592,3 +601,32 @@ double TunnelPlanner::Dist(double x1, double y1, double x2, double y2) {
   double diff_y = (y2 - y1);
   return sqrt( diff_x*diff_x + diff_y*diff_y );
 }
+
+int TunnelPlanner::stateToPlannerState(int state){
+	switch(state){
+		case INIT_STATE:
+			return robotnik_msgs::State::INIT_STATE;
+		break;
+
+		case STANDBY_STATE:
+			return robotnik_msgs::State::STANDBY_STATE;
+		break;
+
+		case READY_STATE:
+			return robotnik_msgs::State::READY_STATE;
+		break;
+
+		case SHUTDOWN_STATE:
+			return robotnik_msgs::State::SHUTDOWN_STATE;
+		break;
+
+		case EMERGENCY_STATE:
+			return robotnik_msgs::State::EMERGENCY_STATE;
+		break;
+
+		case FAILURE_STATE:
+			return robotnik_msgs::State::EMERGENCY_STATE;
+		break;    
+	}
+	return robotnik_msgs::State::UNKOWN_STATE;
+};

@@ -20,19 +20,20 @@ find_package(catkin REQUIRED COMPONENTS
   self_test
   actionlib
   message_generation
+  robotnik_msgs
 )
 
 find_package(PCL REQUIRED)
 
 add_message_files(
-   FILES goal.msg
+   FILES goal.msg 
+   State.msg
 )
 
-add_action_files(
-	DIRECTORY action FILES GoTo.action)
+add_action_files(DIRECTORY action FILES GoTo.action)
 
 ## Generate added messages and services with any dependencies listed here
-generate_messages(DEPENDENCIES std_msgs actionlib_msgs geometry_msgs ackermann_msgs)
+generate_messages(DEPENDENCIES std_msgs actionlib_msgs geometry_msgs ackermann_msgs robotnik_msgs)
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
@@ -83,7 +84,8 @@ target_link_libraries(tunnel_planner
 
 ## Declare a cpp executable
 add_executable(robospect_planner_node src/robospect_planner_node.cpp)
-add_dependencies(robospect_planner_node roscpp sensor_msgs robotnik_msgs robospect_planner_generate_messages_cpp)
+add_dependencies(robospect_planner_node robotnik_msgs_generate_messages_cpp)
+add_dependencies(robospect_planner_node robospect_planner_generate_messages_cpp)
 target_link_libraries(robospect_planner_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} tunnel_planner)
 
 ##Install
