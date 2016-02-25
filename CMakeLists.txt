@@ -86,6 +86,7 @@ target_link_libraries(tunnel_planner
 add_executable(robospect_planner_node src/robospect_planner_node.cpp)
 add_dependencies(robospect_planner_node robotnik_msgs_generate_messages_cpp)
 add_dependencies(robospect_planner_node robospect_planner_generate_messages_cpp)
+add_dependencies(tunnel_planner robospect_planner_generate_messages_cpp robotnik_msgs_generate_messages_cpp)
 target_link_libraries(robospect_planner_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} tunnel_planner)
 
 ##Install
