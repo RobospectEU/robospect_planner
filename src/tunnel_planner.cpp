@@ -205,77 +205,154 @@ void TunnelPlanner::StandbyState(){
   }
 }
 
+/*! \fn int TunnelPlanner::CalculateDirectionSpeed(geometry_msgs::Pose2D robot_position, geometry_msgs::Pose2D target_position)
+*	\brief Calcula el sentido de movimiento de una ruta, dependiendo de la posición inicial y el ángulo del robot
+*	\return 1 si el sentido es positivo
+*	\return -1 si el sentido es negativo
+*/
+int TunnelPlanner::CalculateDirectionSpeed(geometry_msgs::Pose2D robot_position, geometry_msgs::Pose2D target_position){
+	int ret = 1;
+	double alpha = robot_position.theta;
+	double x =	robot_position.x, y = robot_position.y;
+	double ux, uy, vx, vy;
+	double beta = 0.0;
+	static int last_direction = 0;
+	static double pi_medios = M_PI / 2.0, max_diff = 5.0 * M_PI / 180.0;
+	int iCase = 0;
+
+	//
+	// si la posicion objetivo es la misma del robot, devolvemos 0
+	if( (target_position.x == x) && (target_position.y == y) ){
+		return 0;
+	}
+	// Cálculo del vector director del robot respecto al sistema de coordenadas del robot
+	ux = cos(alpha);
+	uy = sin(alpha);
+	// Cálculo del vector entre el punto objetivo y el robot
+	vx = target_position.x - x;
+	vy = target_position.y - y;
+
+	// Cálculo del ángulo entre el vector director y el vector al punto objetivo
+	beta = acos( (ux * vx + uy * vy) / ( sqrt(ux*ux + uy*uy) * sqrt(vx*vx + vy*vy) ) );
+
+	// Devolvemos valor dependiendo del ángulo entre la orientación del robot y la posición objetivo (radianes)
+	// Tendremos en cuenta el valor del sentido de avance de la última ruta.
+	if(fabs(beta) <= pi_medios){
+		// Calculo inicial de direccion
+		if(last_direction == 0)
+			ret = 1;
+		else {
+			ret = 1;
+
+			if( fabs(beta - pi_medios) <= max_diff){
+				if(last_direction != ret){
+					iCase = 1;
+					ret = -1;
+
+				}else {
+					iCase = 2;
+				}
+			}
+
+		}
+	}else{
+		// Calculo inicial de direccion
+		if(last_direction == 0)
+			ret = -1;
+		else {
+			ret = -1;
+			if(fabs(beta - pi_medios) <= max_diff){
+				if(last_direction != ret){
+					ret = 1;
+					iCase = 3;
+				}else{
+					iCase = 4;
+				}
+			}
+
+		}
+	}
+
+	ROS_INFO("%s:CalculateDirectionSpeed:  case %d. Beta = %.2lf. Diff = %.2lf. Last direction = %d, new direction = %d", sComponentName.c_str(),
+			 iCase, beta*180.0/M_PI, (beta - pi_medios)*180.0/M_PI, last_direction, ret);
+
+	last_direction = ret;
+	return ret;
+}
+
 ReturnValue TunnelPlanner::MergePath(){  //TODO: why do we need a queue of paths?
   Waypoint new_waypoint, wFirst, wLast;
   Path aux;
+  int direction = 0;
 		
   if(action_server_goto.isNewGoalAvailable()){
     goto_goal.target = action_server_goto.acceptNewGoal()->target; // Reads points from action server
     if(goto_goal.target.size() > 0){
-      /*      if(goto_goal.target.size() > 1){	// Tries to use the second point of the route
-	direction = CalculateDirectionSpeed(goto_goal.target[1].pose);
-      }else{
-	direction = CalculateDirectionSpeed(goto_goal.target[0].pose);
-	}*/ 
-						
-      for(int i = 0; i < goto_goal.target.size(); i++){
-	ROS_INFO("%s::MergePath: Point %d (%.3lf, %.3lf, %.3lf) speed = %.3lf", sComponentName.c_str(), i,  goto_goal.target[i].pose.x, 
-					goto_goal.target[i].pose.y, goto_goal.target[i].pose.theta, goto_goal.target[i].speed);
-					
-	new_waypoint.dX = goto_goal.target[i].pose.x;
-	new_waypoint.dY = goto_goal.target[i].pose.y;
-	new_waypoint.dA = goto_goal.target[i].pose.theta;
-	// Depending on the calculated motion direction, applies positive or negative speed
-	//if(direction == 1){ TODO: Does the robot have to turn??
-	new_waypoint.dSpeed = fabs(goto_goal.target[i].speed);
-	  /*}else{
-	  new_waypoint.dSpeed = -fabs(goto_goal.target[i].speed);
-	  }*/
-					
-	pathFilling_.AddWaypoint(new_waypoint);							
-      }
-      
-      if(pathFilling_.Optimize(TURN_RADIUS) != OK) 
-	ROS_ERROR("%s::MergePath: Error optimizing the path", sComponentName.c_str());
+		if(goto_goal.target.size() > 1){	// Tries to use the second point of the route
+			direction = CalculateDirectionSpeed(this->pose2d_robot, goto_goal.target[1].pose);
+		  }else{
+			direction = CalculateDirectionSpeed(this->pose2d_robot, goto_goal.target[0].pose);
+		}
+		ROS_INFO("%s::MergePath: Direction speed = %d", sComponentName.c_str(), direction);
+							
+		for(int i = 0; i < goto_goal.target.size(); i++){
+			ROS_INFO("%s::MergePath: Point %d (%.3lf, %.3lf, %.3lf) speed = %.3lf", sComponentName.c_str(), i,  goto_goal.target[i].pose.x, 
+							goto_goal.target[i].pose.y, goto_goal.target[i].pose.theta, goto_goal.target[i].speed);
+							
+			new_waypoint.dX = goto_goal.target[i].pose.x;
+			new_waypoint.dY = goto_goal.target[i].pose.y;
+			new_waypoint.dA = goto_goal.target[i].pose.theta;
+			// Depending on the calculated motion direction, applies positive or negative speed
+			if(direction == 1){ 
+				new_waypoint.dSpeed = fabs(goto_goal.target[i].speed);
+			}else{
+			  new_waypoint.dSpeed = -fabs(goto_goal.target[i].speed);
+			}
+							
+			pathFilling_.AddWaypoint(new_waypoint);							
+		}
+		  
+		if(pathFilling_.Optimize(TURN_RADIUS) != OK) 
+			ROS_ERROR("%s::MergePath: Error optimizing the path", sComponentName.c_str());
 
-      ROS_INFO("Printing the path after the optimization");
-      pathFilling_.Print();
-      
-      // Adds the new path to the queue
-      qPath.push(pathFilling_);
-      // Clears temporary path object
-      pathFilling_.Clear();
-    				
-      goto_feedback.percent_complete = 0.0;  // Inits the feedback percentage
-      goto_result.route_result = 100;			// Inits the result value
-				
-      // Only if exists any path into the queue
-      if(qPath.size() > 0){					
-	aux = qPath.front();
-	aux.GetWaypoint(0, &wFirst);
-	aux.BackWaypoint(&wLast);
+		ROS_INFO("Printing the path after the optimization");
+		pathFilling_.Print();
 
-	ROS_INFO("%s::MergePath: Adding new %d points from (%.2lf, %.2lf) to (%.2lf, %.2lf) and %d magnets",
-		 sComponentName.c_str(), aux.NumOfWaypoints() ,wFirst.dX, wFirst.dY, wLast.dX, wLast.dY, aux.NumOfMagnets());
-	ROS_INFO("%s::MergePath: Current number of points = %d and magnets = %d",
-		 sComponentName.c_str(), pathCurrent_.NumOfWaypoints() , pathCurrent_.NumOfMagnets());
+		// Adds the new path to the queue
+		qPath.push(pathFilling_);
+		// Clears temporary path object
+		pathFilling_.Clear();
 					
-	// Adds the first path in the queue to the current path
-	pathCurrent_+=qPath.front();
+		goto_feedback.percent_complete = 0.0;  // Inits the feedback percentage
+		goto_result.route_result = 100;			// Inits the result value
 					
-	// Needs at least two points
-	if(pathCurrent_.NumOfWaypoints() < 2){		
-	  if(pathCurrent_.CreateInterpolatedWaypoint(this->pose2d_robot) == ERROR){
-	    ROS_ERROR("%s::MergePath: Error adding an extra point", sComponentName.c_str());
-	  }
-	}
-					
-	ROS_INFO("%s::MergePath: New number of points in current path (AFTER ADDING NEW POINTS AND INTERPOLATING THEM)= %d and magnets = %d", sComponentName.c_str(), pathCurrent_.NumOfWaypoints() , pathCurrent_.NumOfMagnets());
-	
-	qPath.pop(); // Pops the extracted path
-	goto_goal.target.clear();	// removes current goals		
-	return OK;
-      }
+		  // Only if exists any path into the queue
+		if(qPath.size() > 0){					
+			aux = qPath.front();
+			aux.GetWaypoint(0, &wFirst);
+			aux.BackWaypoint(&wLast);
+
+			ROS_INFO("%s::MergePath: Adding new %d points from (%.2lf, %.2lf) to (%.2lf, %.2lf) and %d magnets",
+				 sComponentName.c_str(), aux.NumOfWaypoints() ,wFirst.dX, wFirst.dY, wLast.dX, wLast.dY, aux.NumOfMagnets());
+			ROS_INFO("%s::MergePath: Current number of points = %d and magnets = %d",
+				 sComponentName.c_str(), pathCurrent_.NumOfWaypoints() , pathCurrent_.NumOfMagnets());
+							
+			// Adds the first path in the queue to the current path
+			pathCurrent_+=qPath.front();
+							
+			// Needs at least two points
+			if(pathCurrent_.NumOfWaypoints() < 2){		
+			  if(pathCurrent_.CreateInterpolatedWaypoint(this->pose2d_robot) == ERROR){
+				ROS_ERROR("%s::MergePath: Error adding an extra point", sComponentName.c_str());
+			  }
+			}
+							
+			ROS_INFO("%s::MergePath: New number of points in current path (AFTER ADDING NEW POINTS AND INTERPOLATING THEM)= %d and magnets = %d", sComponentName.c_str(), pathCurrent_.NumOfWaypoints() , pathCurrent_.NumOfMagnets());
+			pathCurrent_.Print();
+			qPath.pop(); // Pops the extracted path
+			goto_goal.target.clear();	// removes current goals		
+			return OK;
+		}
     }
   }
   return ERROR;
@@ -442,6 +519,7 @@ int TunnelPlanner::PurePursuit(){
   double desired_yaw_,actual_distance_;
   double curv;
   double dth;
+  double direction = 1;
   
   geometry_msgs::Pose2D current_position = this->pose2d_robot;		
   geometry_msgs::Pose2D next_position;
@@ -452,12 +530,16 @@ int TunnelPlanner::PurePursuit(){
     ROS_ERROR("%s::PurePursuit: Error getting next waypoint in the path", sComponentName.c_str());
     return -1;
   }
+  if(next_waypoint.dSpeed > 0.0)
+	direction = 1;
+  else
+	direction = -1;
   
-  if (current_position.x>=next_waypoint.dX){  
+  if ((next_waypoint.dSpeed > 0.0 and current_position.x>=next_waypoint.dX) or ((next_waypoint.dSpeed < 0.0 and current_position.x<=next_waypoint.dX))){  
     //TODO: improve this check (it does not work when the robot is moving in the negative-x direction)	
     pathCurrent_.NextWaypoint();
     if(pathCurrent_.GetCurrentWaypointIndex() == ERROR){
-      ROS_ERROR("%sError setting next waypoint", sComponentName.c_str());
+      ROS_ERROR("%s::PurePursuit: Error setting next waypoint", sComponentName.c_str());
       return ERROR;
     }
   }
@@ -469,10 +551,8 @@ int TunnelPlanner::PurePursuit(){
   if (fabs(current_position.theta-desired_yaw)>0.25 && !approach_state_){
 	tm_->setState(APPROACH_STATE);
 	ROS_INFO("PurePursuit(): Approaching the wall");
-     	approach_state_=true;
-	
-  }
-  else if (fabs(current_position.theta-desired_yaw)<0.25 && approach_state_){
+	approach_state_=true;
+  }else if (fabs(current_position.theta-desired_yaw)<0.25 && approach_state_){
 	tm_->setState(NAVIGATION_STATE);
 	ROS_INFO("PurePursuit(): Wall reached, start navigation");
 	approach_state_=false;
@@ -480,11 +560,12 @@ int TunnelPlanner::PurePursuit(){
 
   double actual_distance=tm_->getWallDistance();
   //TODO: check tf: these values are referred to the base_footprint frame (laser scans needs to be expressed in base_footprint frame)
+  ROS_INFO("PurePursuit: Distance to wall = %.3lf(desired = %.3lf), desired_yaw = %.3lf, lookahead = %.3lf", actual_distance, desired_distance_, desired_yaw, dLookAhead_);
   
   // We need to correct the distance instead of aligning the orientation
-  dx1=-(actual_distance-desired_distance_)*sin(desired_yaw);
+  dx1=(-direction)*(actual_distance-desired_distance_)*sin(desired_yaw);
   dy1=(actual_distance-desired_distance_)*cos(desired_yaw);
-
+  ROS_INFO("PurePursuit: dx1 = %.3lf, dy1 = %.3lf", dx1, dy1);
   //Already in the robot frame
   next_position.x=cos(desired_yaw)*dLookAhead_+dx1;
   next_position.y=sin(desired_yaw)*dLookAhead_+dy1;

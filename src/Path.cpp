@@ -53,8 +53,8 @@ ReturnValue Path::CreateInterpolatedWaypoint(geometry_msgs::Pose2D pose){
   if(vPoints.size()> 0){
     vector <Waypoint> vAuxPoints;
     Waypoint new_point;
-    new_point.dX = (vPoints[0].dX - pose.x) / 2.0;
-    new_point.dY = (vPoints[0].dY - pose.y) / 2.0;
+    new_point.dX = (vPoints[0].dX + pose.x) / 2.0;
+    new_point.dY = (vPoints[0].dY + pose.y) / 2.0;
     new_point.dSpeed = vPoints[0].dSpeed;
     new_point.dA = vPoints[0].dA;
     vAuxPoints.push_back(new_point);
@@ -114,7 +114,7 @@ ReturnValue Path::GetNextWaypoint(Waypoint *wp){
     *wp = vPoints[iCurrentWaypoint + 1];
     ret = OK;
   }
-  
+  //printf("current waypoint = %d, vPoints = %d\n", iCurrentWaypoint, (int)vPoints.size());
   pthread_mutex_unlock(&mutexPath);
   
   return ret;

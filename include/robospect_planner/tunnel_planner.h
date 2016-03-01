@@ -95,6 +95,8 @@ class TunnelPlanner: public Component
   double Dist(double x1, double y1, double x2, double y2);
   void UpdateLookAhead();
   int stateToPlannerState(int state);
+  int CalculateDirectionSpeed(geometry_msgs::Pose2D robot_position, geometry_msgs::Pose2D target_position);
+
   
  private:
 
