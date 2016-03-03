@@ -46,6 +46,9 @@ class TunnelMap{
   inline double getWallOrientation(){ return yaw_; }
   inline double getWallDistance(){ return distance_; }
   void setState(bool state);
+  void readParams();
+  void setParams(double footprint_width, double crane_length, double footprint_length, double lateral_clearance, double obstacle_range, double lookahead_dist,
+	string wall_side, double ransac_threshold, double max_y_dist);
 
  private:
   ros::NodeHandle private_nh_;
@@ -54,6 +57,8 @@ class TunnelMap{
   //! For visualization purposes
   ros::Publisher pub_wall_line_;
   ros::Publisher pub_wall_pcl_;
+  ros::Publisher pub_obstacle_pcl_;
+  
   //!Whether to publish the detected wall line
   string publish_wall_line_;
   //! Wall line pose

@@ -20,6 +20,10 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Pose2D.h>
 
+#include <dynamic_reconfigure/server.h>
+#include <robospect_planner/PlannerConfig.h>
+
+
 #define COMMAND_ACKERMANN         100 
 #define COMMAND_TWIST	          200 
 #define COMMAND_ACKERMANN_STRING  "Ackermann" 
@@ -175,6 +179,13 @@ class TunnelPlanner: public Component
   //! Just for debug
   ros::Publisher pub_next_point_;
   ros::Publisher pub_next_pose_;
+  
+  dynamic_reconfigure::Server<robospect_planner::PlannerConfig> reconfigure_server;
+  dynamic_reconfigure::Server<robospect_planner::PlannerConfig>::CallbackType r_callback;
+  
+  protected:
+  
+  void reconfigureCallback(robospect_planner::PlannerConfig &config, uint32_t level);
   
 };
 

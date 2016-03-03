@@ -24,6 +24,28 @@ TunnelPlanner::TunnelPlanner(ros::NodeHandle h) : nh_(h), private_nh_("~"), desi
   ROS_INFO("TunnelPlanner initialized");
 }
 
+/*! \fn void TunnelPlanner::reconfigure_callback(robospect_planner::PlannerConfig &config, uint32_t level)
+ *  \brief callback called when dynamic parameters are modified
+ * 
+*/
+void TunnelPlanner::reconfigureCallback(robospect_planner::PlannerConfig &config, uint32_t level) {
+  //
+  if(level == 0){
+	  ROS_INFO("Reconfigure Request: %.3f %.3f %.3lf", config.d_lookahead_min, config.d_lookahead_max, config.desired_distance);
+	  this->d_lookahead_min_ = config.d_lookahead_min;
+	  this->d_lookahead_max_ = config.d_lookahead_max;
+	  this->desired_distance_ = config.desired_distance;
+	  this->Kr = config.kr;
+  }else if(level == 1){
+	//ROS_INFO("Reconfigure Request: %s", config.preferred_wall_side.c_str());	
+	tm_->setParams(config.footprint_width, config.crane_length, config.footprint_length, config.lateral_clearance, config.obstacle_range, config.lookahead_distance,
+	config.preferred_wall_side, config.ransac_threshold, config.max_y_dist);
+  }
+  
+}
+
+
+
 void TunnelPlanner::ROSSetup(){
   string s_command_type;
 		
@@ -79,6 +101,11 @@ void TunnelPlanner::ROSSetup(){
   // Action server 
   action_server_goto.registerGoalCallback(boost::bind(&TunnelPlanner::GoalCB, this)); //DO NOTHING!!!
   action_server_goto.registerPreemptCallback(boost::bind(&TunnelPlanner::PreemptCB, this));
+  
+  // Reconfigure server
+  r_callback = boost::bind(&TunnelPlanner::reconfigureCallback, this, _1, _2);
+  reconfigure_server.setCallback(r_callback);
+  
 }
 
 void TunnelPlanner::OdomCallback(const nav_msgs::Odometry::ConstPtr& odom_msg)
