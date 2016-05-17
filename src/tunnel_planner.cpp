@@ -212,9 +212,10 @@ int TunnelPlanner::CheckOdomReceive(){
 
 void TunnelPlanner::StandbyState(){
   //ROS_INFO("TunnelPlanner::StandbyState, isFree: %u, bCancel: %u, bEnabled: %u",);
-  if(CheckOdomReceive() == -1)
+  if(CheckOdomReceive() == -1){
+	ROS_ERROR("%s::StandbyState: Not receiving robot's odometry at the desired frequency", sComponentName.c_str());
     SwitchToState(EMERGENCY_STATE);
-  else{
+  }else{
     if(bEnabled && !bCancel && tm_->isFree()){
       //If we have one or more paths and they were correctly merged, switch to Ready
       if(pathCurrent_.Size() > 0 || MergePath() == OK){    //In MergePath we check that pathCurrent_.Size is >2. Not understand the sense of the first check!!! 
