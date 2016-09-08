@@ -10,7 +10,7 @@ void TunnelMap::readParams(){
 	private_nh_.param("obstacle_range", nav_obstacle_range_, DEFAULT_OBSTACLE_RANGE);
 
 	private_nh_.param("lookahead_distance",lookahead_dist_,DEFAULT_LOOKAHEAD_DISTANCE);
-	private_nh_.param<string>("preferred_wall_side", preferred_wall_side_, "RIGHT");
+	private_nh_.param<string>("preferred_wall_side", preferred_wall_side_, "LEFT");
 	private_nh_.param("ransac_threshold",ransac_threshold_,0.1);
 	private_nh_.param("max_y_dist",max_y_dist_,10.0);   
 	private_nh_.param<string>("publish_wall_line", publish_wall_line_, "true");

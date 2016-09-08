@@ -33,8 +33,8 @@
 #define D_LOOKAHEAD_MAX	 1.1	// Maxiumum distance to the current sub-goal
 #define DEFAULT_DESIRED_DISTANCE 1.0				  
 
-#define ODOM_TIMEOUT_ERROR   0.2 // max num. of seconds without receiving odom values 
-#define MAP_TIMEOUT_ERROR    0.2 
+#define ODOM_TIMEOUT_ERROR   0.3 // max num. of seconds without receiving odom values 
+#define MAP_TIMEOUT_ERROR    0.3 
 
 #define WAYPOINT_POP_DISTANCE_M  0.10 // Maximum error in distance to the last waypoint to end the mission
 #define MAX_SPEED 1.2
